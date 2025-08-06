@@ -5,6 +5,7 @@ import { DEBUG_HOST, DEBUG_PORT } from './config'
 import browserService from './service/browser.service'
 import './ipc.main'
 import icon from '../../resources/icon.png?asset'
+import iconFlash from '../../resources/icon-flash.png?asset'
 import sendService from './service/send.service'
 import emitterService from './service/emitter.service'
 // import log from 'electron-log/main';
@@ -86,8 +87,9 @@ app.whenReady().then(async () => {
     // 创建托盘图标（推荐PNG格式适配多平台）
     let isFlashing = false;
     let flashInterval;
-    let originalIcon = join(app.getAppPath(),'../resources/icon.png')
-    let flashingIcon = join(app.getAppPath(),'../resources/icon-flash.png')
+    // 修复图标路径问题 - 使用与主窗口相同的icon导入方式
+    let originalIcon = icon // 使用已导入的icon
+    let flashingIcon = iconFlash // 使用已导入的iconFlash
     let tray = new Tray(
         nativeImage.createFromPath(originalIcon)
     )
