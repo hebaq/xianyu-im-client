@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, Tray, nativeImage, Menu } from 'electron'
+import { app, shell, BrowserWindow, Tray, nativeImage, Menu, globalShortcut } from 'electron'
 import path, { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DEBUG_HOST, DEBUG_PORT } from './config'
@@ -80,6 +80,20 @@ app.whenReady().then(async () => {
     // 创建window
     const mainWindow = await createWindow()
     sendService.setWind(mainWindow)
+    
+    // 注册全局快捷键 Ctrl+Alt+Q 来显示/隐藏窗口
+    const ret = globalShortcut.register('CommandOrControl+Alt+Q', () => {
+        if (mainWindow.isVisible()) {
+            mainWindow.hide()
+        } else {
+            mainWindow.show()
+            mainWindow.focus()
+        }
+    })
+    
+    if (!ret) {
+        console.log('全局快捷键注册失败')
+    }
     app.on('activate', function () {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -119,6 +133,7 @@ app.whenReady().then(async () => {
         { label: '退出', click: () => {
             stopFlashing()
             tray.destroy()
+            globalShortcut.unregisterAll()
             if(process.platform !== 'darwin') {
                 app.exit(0)
             }else{
@@ -149,6 +164,8 @@ app.whenReady().then(async () => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+    // 注销所有全局快捷键
+    globalShortcut.unregisterAll()
     if (process.platform !== 'darwin') {
         app.quit()
     }
