@@ -7,6 +7,7 @@ import msgService from './msg.service'
 import sendService from './send.service'
 import { userAdd, userGet, userList, userRemove, userUpdate } from './store.service'
 import windowService from './window.service'
+import notificationService from './notification.service'
 
 export class XyUserService {
     private users = new Map<string, XyImService>()
@@ -16,10 +17,26 @@ export class XyUserService {
         const xyImService = new XyImService(user)
         await xyImService.init()
         this.users.set(user.userId, xyImService)
-        xyImService.on('message', (msg) => {
+        xyImService.on('message', async (msg) => {
             xyImService.readMsg(msg); // 此处自动已读消息
             msgService.handleMsg(msg, xyImService)
-            sendService.log2renderer(`新消息`, JSON.stringify(msg))
+            // 发送格式化的消息预览到UI日志，显示账号信息和客户信息
+            const messagePreview = msg.type === 'image' 
+                ? `📷 [${user.displayName}] 收到 ${msg.senderName} 发送的图片`
+                : `💬 [${user.displayName}] 收到 ${msg.senderName}: ${msg.content.length > 30 ? msg.content.substring(0, 30) + '...' : msg.content}`
+            sendService.log2renderer(`新消息`, messagePreview)
+            
+            // 显示系统通知和播放声音
+            await notificationService.showNewMessageNotification(
+                msg.senderName,
+                msg.content,
+                () => {
+                    // 点击通知时显示主窗口
+                    sendService.getMainWindow()?.show()
+                    sendService.getMainWindow()?.focus()
+                }
+            )
+            
             const olduser = userGet(user.userId)
             if (olduser) {
                 olduser.unread = true
@@ -51,7 +68,7 @@ export class XyUserService {
     userImLogout(user: GooFishUser) {
         if (this.users.has(user.userId)) {
             const xyImService = this.users.get(user.userId)
-            xyImService?.ws?.close()
+            xyImService?.disconnect() // 使用新的断开连接方法
             this.users.delete(user.userId)
             user.online = false
             userUpdate(user)

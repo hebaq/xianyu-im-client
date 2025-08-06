@@ -11,7 +11,18 @@ interface ErrorHandler {
 
 class MsgLogHandler implements MessageHandler {
     handle(msg: MsgFormattedPayload) {
-        console.log(`收到消息了---`, msg)
+        // 开发模式下才显示详细的消息处理日志
+        if (process.env.NODE_ENV === 'development') {
+            const contentPreview = msg.content.length > 30 
+                ? msg.content.substring(0, 30) + '...' 
+                : msg.content
+            
+            if (msg.type === 'image') {
+                console.log(`📨 Handler: ${msg.senderName} sent an image`)
+            } else {
+                console.log(`📨 Handler: ${msg.senderName} - "${contentPreview}"`)
+            }
+        }
     }
 }
 

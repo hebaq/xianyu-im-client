@@ -34,6 +34,7 @@ export interface IpcMainEvents {
 export interface IpcRendererEvents {
     refreshUserList:()=>void
     log: (log:LogItem)=>void
+    playNotificationSound: ()=>void
 }
 
 export interface IpcInvokeEvents {

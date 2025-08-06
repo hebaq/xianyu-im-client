@@ -26,6 +26,10 @@ export class SendService {
     setWind(wind:BrowserWindow) {
         this.wind = wind
     }
+
+    getMainWindow(): BrowserWindow | null {
+        return this.wind
+    }
 }
 
 

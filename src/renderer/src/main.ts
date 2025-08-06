@@ -6,6 +6,8 @@ import './style/reset.css'
 import './style/base.scss'
 import PrimeVue from 'primevue/config'
 import Aura from '@primeuix/themes/aura'
+import { addEvent } from './utils/ipc.listener'
+import audioService from './utils/audio.service'
 
 const app = createApp(App)
 app.use(router)
@@ -16,3 +18,15 @@ app.use(router)
         }
     })
     .mount('#app')
+
+// 添加音频播放的IPC事件监听器
+addEvent('playNotificationSound', () => {
+    audioService.playSound()
+})
+
+// 在开发模式下暴露测试方法到全局
+if (import.meta.env.DEV) {
+    (window as any).testAudio = () => {
+        audioService.testSound()
+    }
+}

@@ -22,7 +22,9 @@ async function createWindow(): Promise<BrowserWindow> {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
             allowRunningInsecureContent: true,
-            webSecurity: true,
+            webSecurity: false, // 允许访问本地资源，包括音频文件
+            nodeIntegration: false,
+            contextIsolation: true,
         }
         // frame:false,
         // transparent:true,
