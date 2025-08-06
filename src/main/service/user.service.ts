@@ -1,13 +1,15 @@
+import { sandboxManager } from '../sandbox/AccountSandbox'
 import { GooFishUser } from '../types'
 import { waitFor } from '../utils'
 import browserService from './browser.service'
 import emitterService from './emitter.service'
 import { XyImService } from './im.service'
-import msgService from './msg.service'
+import { MsgService } from './msg.service'
+const msgService = new MsgService()
 import sendService from './send.service'
 import { userAdd, userGet, userList, userRemove, userUpdate } from './store.service'
-import windowService from './window.service'
-import notificationService from './notification.service'
+import { NotificationService } from './notification.service'
+const notificationService = new NotificationService()
 
 export class XyUserService {
     private users = new Map<string, XyImService>()
@@ -28,6 +30,7 @@ export class XyUserService {
             
             // 显示系统通知和播放声音
             await notificationService.showNewMessageNotification(
+                user.userId,
                 msg.senderName,
                 msg.content,
                 () => {
@@ -78,7 +81,7 @@ export class XyUserService {
     }
 
     async login() {
-        const wind = windowService.createXyWindow()
+        const wind = sandboxManager.createSandbox(new Date().getTime() + '').browserWindow
         const page = await browserService.getPage(wind)
         if (!page) {
             sendService.log2renderer('登录失败', '无法打开网页', 0)
@@ -152,7 +155,7 @@ export class XyUserService {
             return
         }
         let newAccessToken: string = ''
-        const wind = windowService.createXyWindow()
+        const wind = sandboxManager.createSandbox(userId).browserWindow
         const page = await browserService.getPage(wind)
         if (!page) {
             //
@@ -198,15 +201,18 @@ export class XyUserService {
             await this.userImLogin(user)
             return
         } catch (err: any) {
+            // Log the error but do not close the window, as the user's main intention is to open it.
+            // The token refresh can be considered a background task.
             sendService.log2renderer(
-                `登录失败`,
-                '用户 ' + user.displayName + ' 登录失败：' + err.message,
+                `Token刷新失败`,
+                '用户 ' + user.displayName + ' 的Token刷新失败，但这不影响使用。',
                 0,
                 true
             )
-            wind.close()
-            userRemove(user)
-            sendService.send2renderer('refreshUserList')
+            // Do not close the window or remove the user.
+            // wind.close()
+            // userRemove(user)
+            // sendService.send2renderer('refreshUserList')
             return
         }
     }

@@ -40,9 +40,15 @@ class TextMsgHandler implements MessageHandler {
     }
 }
 
-class MsgService {
+export class MsgService {
     private middlewares: MessageHandler[] = []
     private errorPipes: ErrorHandler[] = []
+
+    constructor() {
+        this.use(new TextMsgHandler())
+        this.use(new MsgLogHandler())
+        this.use(new ImageMsgHandler())
+    }
 
     use(middleware: MessageHandler) {
         this.middlewares.push(middleware)
@@ -72,9 +78,4 @@ class MsgService {
     }
 }
 
-const msgService = new MsgService()
-msgService.use(new TextMsgHandler())
-msgService.use(new MsgLogHandler())
-msgService.use(new ImageMsgHandler())
 
-export default msgService

@@ -1,7 +1,7 @@
 {
     "appId": "com.goofish.xxx",
     "asar": true,
-    "productName": "闲鱼IM",
+    "productName": "闲鱼助手",
     "directories": {
         "output": "release/${version}",
         "buildResources": "build"

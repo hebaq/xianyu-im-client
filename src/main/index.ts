@@ -8,9 +8,8 @@ import icon from '../../resources/icon.png?asset'
 import iconFlash from '../../resources/icon-flash.png?asset'
 import sendService from './service/send.service'
 import emitterService from './service/emitter.service'
-// import log from 'electron-log/main';
+import { sandboxManager } from './sandbox/AccountSandbox';
 
-// log.initialize()
 async function createWindow(): Promise<BrowserWindow> {
     const mainWindow = new BrowserWindow({
         width: 375,
@@ -26,10 +25,6 @@ async function createWindow(): Promise<BrowserWindow> {
             nodeIntegration: false,
             contextIsolation: true,
         }
-        // frame:false,
-        // transparent:true,
-        // backgroundColor:'#00000000',
-        // resizable:false
     })
 
     mainWindow.on('ready-to-show', () => {
@@ -41,8 +36,6 @@ async function createWindow(): Promise<BrowserWindow> {
         return { action: 'deny' }
     })
 
-    // HMR for renderer base on electron-vite cli.
-    // Load the remote URL for development or the local html file for production.
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
         mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     } else {
@@ -59,10 +52,6 @@ async function createWindow(): Promise<BrowserWindow> {
     return mainWindow
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-// set debugport
 app.commandLine.appendSwitch('remote-debugging-port', DEBUG_PORT)
 app.commandLine.appendSwitch('remote-debugging-address', DEBUG_HOST)
 app.commandLine.appendSwitch('disable-web-security', 'NetworkService')
@@ -70,18 +59,13 @@ app.commandLine.appendSwitch('user-data-dir', path.resolve(app.getAppPath(), '/t
 app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.electron')
     app.on('browser-window-created', (_, window) => {
-        // bindPuppeteer()
         browserService.connect()
         optimizer.watchWindowShortcuts(window)
     })
 
-    // 注册ipcMain 事件监听
-    // registerAllService()
-    // 创建window
     const mainWindow = await createWindow()
     sendService.setWind(mainWindow)
     
-    // 注册全局快捷键 Ctrl+Alt+Q 来显示/隐藏窗口
     const ret = globalShortcut.register('CommandOrControl+Alt+Q', () => {
         if (mainWindow.isVisible()) {
             mainWindow.hide()
@@ -95,35 +79,33 @@ app.whenReady().then(async () => {
         console.log('全局快捷键注册失败')
     }
     app.on('activate', function () {
-        // On macOS it's common to re-create a window in the app when the
-        // dock icon is clicked and there are no other windows open.
-        if (BrowserWindow.getAllWindows().length === 0) createWindow()
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow()
+        }
     })
 
-    // 创建托盘图标（推荐PNG格式适配多平台）
     let isFlashing = false;
     let flashInterval;
-    // 修复图标路径问题 - 使用与主窗口相同的icon导入方式
-    let originalIcon = icon // 使用已导入的icon
-    let flashingIcon = iconFlash // 使用已导入的iconFlash
+    let originalIcon = icon
+    let flashingIcon = iconFlash
     let tray = new Tray(
         nativeImage.createFromPath(originalIcon)
     )
     function startFlashing() {
-        if (isFlashing) return; // 防止重复启动闪烁
+        if (isFlashing) return;
         isFlashing = true;
         let toggle = true;
         flashInterval = setInterval(() => {
             tray.setImage(nativeImage.createFromPath(toggle ? flashingIcon : originalIcon));
-            toggle = !toggle; // 切换图标
-        }, 500); // 每500毫秒切换一次
+            toggle = !toggle;
+        }, 500);
     }
     
     function stopFlashing() {
-        if (!isFlashing) return; // 如果没有在闪烁中
+        if (!isFlashing) return;
         isFlashing = false;
         clearInterval(flashInterval);
-        tray.setImage(nativeImage.createFromPath(originalIcon)); // 恢复正常图标
+        tray.setImage(nativeImage.createFromPath(originalIcon));
     }
     tray.on('click', () => {
         mainWindow.show()
@@ -143,15 +125,15 @@ app.whenReady().then(async () => {
     ])
     tray.setContextMenu(contextMenu)
 
-    // 悬停提示
-    tray.setToolTip('闲鱼IM')
+    tray.setToolTip('闲鱼助手')
 
     emitterService.on('newMsg', (t) => {
         tray.setToolTip(t)
         startFlashing()
     })
+    
     mainWindow.on('show',()=>{
-        tray.setToolTip('闲鱼IM')
+        tray.setToolTip('闲鱼助手')
         stopFlashing()
     })
 
@@ -160,17 +142,9 @@ app.whenReady().then(async () => {
     })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
-    // 注销所有全局快捷键
     globalShortcut.unregisterAll()
     if (process.platform !== 'darwin') {
         app.quit()
     }
-    // quitePuppeteer()
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

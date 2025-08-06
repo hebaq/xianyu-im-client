@@ -1,41 +1,63 @@
-import Store from 'electron-store'
 import { GooFishUser } from '../types'
+import { accountStore } from '../storage/AccountStore'
+import { encryptionService } from '../storage/EncryptionService'
+import { app } from 'electron'
+import fs from 'fs'
+import path from 'path'
 
-type MyStore = {
-    userList: GooFishUser[],
+const USER_DATA_KEY = 'userData'
+
+function getAccountStore(userId: string) {
+  return accountStore.getAccountStore(userId)
 }
-export const store = new Store<MyStore>({
-    name: 'goofish',
-    defaults: {
-        userList: [],
+
+export function userAdd(user: GooFishUser) {
+  const store = getAccountStore(user.userId)
+  const encryptedUser = encryptionService.encrypt(JSON.stringify(user))
+  store.set(USER_DATA_KEY, encryptedUser)
+}
+
+export function userRemove(user: GooFishUser) {
+  accountStore.deleteAccountStore(user.userId)
+  // Also delete the file from disk
+  const storePath = path.join(app.getPath('userData'), `account-${user.userId}.json`)
+  if (fs.existsSync(storePath)) {
+    fs.unlinkSync(storePath)
+  }
+}
+
+export function userGet(userId: string): GooFishUser | undefined {
+  try {
+    const store = getAccountStore(userId)
+    const encryptedUser = store.get(USER_DATA_KEY) as string | undefined
+    if (encryptedUser) {
+      const decryptedUser = encryptionService.decrypt(encryptedUser)
+      return JSON.parse(decryptedUser) as GooFishUser
     }
-})
+  } catch (error) {
+    console.error(`Failed to get user ${userId}:`, error)
+  }
+  return undefined
+}
 
-export function userAdd(user:GooFishUser){
-    if(userGet(user.userId)) {
-        userRemove(user)
+export function userUpdate(user: GooFishUser) {
+  userAdd(user)
+}
+
+export function userList(): GooFishUser[] {
+  const users: GooFishUser[] = []
+  const userDataPath = app.getPath('userData')
+  const files = fs.readdirSync(userDataPath)
+
+  files.forEach((file) => {
+    if (file.startsWith('account-') && file.endsWith('.json')) {
+      const userId = file.replace('account-', '').replace('.json', '')
+      const user = userGet(userId)
+      if (user) {
+        users.push(user)
+      }
     }
-    const userList = store.get('userList')
-    userList.unshift(user)
-    store.set('userList',userList)
-}
+  })
 
-export function userRemove(user:GooFishUser){
-    const userList = store.get('userList')
-    const newUserList = userList.filter((v) => v.userId != user.userId)
-    store.set('userList', newUserList)
-}
-
-export function userGet(userId:string):GooFishUser | undefined {
-    const userList = store.get('userList')
-    return userList.find((v) => v.userId == userId)
-}
-
-export function userUpdate(user:GooFishUser){
-    userRemove(user)
-    userAdd(user)
-}
-
-export function userList(){
-    return store.get('userList')
+  return users
 }

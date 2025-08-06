@@ -9,7 +9,7 @@ export interface NotificationOptions {
     onClick?: () => void
 }
 
-class NotificationService {
+export class NotificationService {
     constructor() {
         // 通知服务初始化
     }
@@ -18,8 +18,13 @@ class NotificationService {
      * 显示系统通知
      * @param options 通知选项
      */
-    async showNotification(options: NotificationOptions): Promise<void> {
+    async showNotification(userId: string, options: NotificationOptions): Promise<void> {
         try {
+            // TODO: Add account-specific notification logic here
+            // For example, get user's notification preferences from a config service
+            // const userConfig = accountConfigService.getConfig(userId);
+            // if (!userConfig.notifications.enabled) return;
+
             // 检查通知权限
             if (!Notification.isSupported()) {
                 console.warn('系统通知不被支持')
@@ -84,11 +89,12 @@ class NotificationService {
      * @param onClickCallback 点击通知的回调
      */
     async showNewMessageNotification(
+        userId: string,
         senderName: string, 
         content: string, 
         onClickCallback?: () => void
     ): Promise<void> {
-        await this.showNotification({
+        await this.showNotification(userId, {
             title: `来自 ${senderName} 的新消息`,
             body: content.length > 50 ? content.substring(0, 50) + '...' : content,
             playSound: true,
@@ -97,4 +103,3 @@ class NotificationService {
     }
 }
 
-export default new NotificationService()

@@ -77,7 +77,7 @@ async function syncUserList(){
 }
 
 onMounted(async () => {
-    document.title = `闲鱼IM`
+    document.title = `闲鱼助手`
     isReady.value = true
     addEvent('log',(payload:LogItem)=>{
         logList.value.unshift(payload)
