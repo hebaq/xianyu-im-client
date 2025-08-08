@@ -4,8 +4,8 @@ import { waitFor } from '../utils'
 import browserService from './browser.service'
 import emitterService from './emitter.service'
 import { XyImService } from './im.service'
-import { MsgService } from './msg.service'
-const msgService = new MsgService()
+// import { MsgService } from './msg.service'
+// const msgService = new MsgService()
 import sendService from './send.service'
 import { userAdd, userGet, userList, userRemove, userUpdate } from './store.service'
 import { NotificationService } from './notification.service'
