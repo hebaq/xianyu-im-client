@@ -20,8 +20,9 @@ export class XyUserService {
         await xyImService.init()
         this.users.set(user.userId, xyImService)
         xyImService.on('message', async (msg) => {
-            xyImService.readMsg(msg); // 此处自动已读消息
-            msgService.handleMsg(msg, xyImService)
+            // TODO: 暂时先注释，后面优化自动回复
+            // xyImService.readMsg(msg); // 此处自动已读消息
+            // msgService.handleMsg(msg, xyImService)
             // 发送格式化的消息预览到UI日志，显示账号信息和客户信息
             const messagePreview = msg.type === 'image' 
                 ? `📷 [${user.displayName}] 收到 ${msg.senderName} 发送的图片`

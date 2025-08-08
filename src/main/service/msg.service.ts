@@ -36,7 +36,7 @@ class TextMsgHandler implements MessageHandler {
     async handle(msg: MsgFormattedPayload,wsService:XyImService) {
         if (msg.type !== MsgTypes.TEXT) return
         // 自动回复参考
-        wsService.sendReplyMsg(msg,'你好呀')
+        // wsService.sendReplyMsg(msg,'你好呀')
     }
 }
 

@@ -18,7 +18,7 @@ export class NotificationService {
      * 显示系统通知
      * @param options 通知选项
      */
-    async showNotification(userId: string, options: NotificationOptions): Promise<void> {
+    async showNotification(_userId: string, options: NotificationOptions): Promise<void> {
         try {
             // TODO: Add account-specific notification logic here
             // For example, get user's notification preferences from a config service

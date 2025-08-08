@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, scryptSync, randomBytes } from 'crypto'
+import { createCipheriv, createDecipheriv, scryptSync } from 'crypto'
 
 // For demonstration, using a fixed key. In a real app, this should be managed securely.
 const key = scryptSync('your-secret-password', 'salt', 32)

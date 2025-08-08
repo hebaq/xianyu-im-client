@@ -162,7 +162,7 @@ export class XyImService {
         })
 
         // 添加关闭事件处理
-        this.ws.on('close', (code, reason) => {
+        this.ws.on('close', (code, _reason) => {
             console.warn(`[User:${this.user.userId}] Connection Closed - Code: ${code}`)
             this.clearTimers()
             
@@ -173,7 +173,7 @@ export class XyImService {
         })
 
         // 添加意外断开检测
-        this.ws.on('unexpected-response', (request, response) => {
+        this.ws.on('unexpected-response', (_request, response) => {
             console.error(`[User:${this.user.userId}] Connection Error:`, response.statusCode)
         })
     }
