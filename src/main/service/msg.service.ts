@@ -78,4 +78,4 @@ export class MsgService {
     }
 }
 
-
+export default new MsgService()

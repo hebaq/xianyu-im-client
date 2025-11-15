@@ -6,6 +6,7 @@ import './style/reset.css'
 import './style/base.scss'
 import PrimeVue from 'primevue/config'
 import Aura from '@primeuix/themes/aura'
+import ToastService from 'primevue/toastservice'
 import { addEvent } from './utils/ipc.listener'
 import audioService from './utils/audio.service'
 
@@ -17,6 +18,7 @@ app.use(router)
             locale: 'zh-CN'
         }
     })
+    .use(ToastService)
     .mount('#app')
 
 // 添加音频播放的IPC事件监听器

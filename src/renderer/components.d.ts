@@ -10,9 +10,9 @@ declare module 'vue' {
   export interface GlobalComponents {
     Avatar: typeof import('primevue/avatar')['default']
     Button: typeof import('primevue/button')['default']
-    OverlayBadge: typeof import('primevue/overlaybadge')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SettingsDialog: typeof import('./src/components/SettingsDialog.vue')['default']
     Tag: typeof import('primevue/tag')['default']
     Versions: typeof import('./src/components/versions.vue')['default']
   }

@@ -1,7 +1,8 @@
 <template>
     <router-view></router-view>
+    <Toast position="top-right" />
 </template>
 
 <script setup lang="ts">
-// const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+import Toast from 'primevue/toast'
 </script>

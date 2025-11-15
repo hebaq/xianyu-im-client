@@ -4,19 +4,22 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DEBUG_HOST, DEBUG_PORT } from './config'
 import browserService from './service/browser.service'
 import './ipc.main'
+import icon from '../../resources/icon.png?asset'
+import iconFlash from '../../resources/icon-flash.png?asset'
 import sendService from './service/send.service'
 import emitterService from './service/emitter.service'
 
 async function createWindow(): Promise<BrowserWindow> {
     const mainWindow = new BrowserWindow({
-        width: 375,
-        height: 667,
+        width: 1200,
+        height: 800,
         show: false,
         autoHideMenuBar: true,
-        icon: path.join(process.resourcesPath, 'resources', 'icon.png'),
+        icon: icon,
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
+            webviewTag: true,
             allowRunningInsecureContent: true,
             webSecurity: false, // 允许访问本地资源，包括音频文件
             nodeIntegration: false,
@@ -53,6 +56,9 @@ app.commandLine.appendSwitch('remote-debugging-port', DEBUG_PORT)
 app.commandLine.appendSwitch('remote-debugging-address', DEBUG_HOST)
 app.commandLine.appendSwitch('disable-web-security', 'NetworkService')
 app.commandLine.appendSwitch('user-data-dir', path.resolve(app.getAppPath(), '/temp/chrome'))
+// 忽略证书错误，解决 SSL 握手失败问题
+app.commandLine.appendSwitch('ignore-certificate-errors')
+app.commandLine.appendSwitch('allow-insecure-localhost')
 app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.electron')
     app.on('browser-window-created', (_, window) => {
@@ -83,13 +89,12 @@ app.whenReady().then(async () => {
 
     let isFlashing = false
     let flashInterval
-    const originalIconPath = path.join(process.resourcesPath, 'resources', 'icon.png')
-    const flashingIconPath = path.join(process.resourcesPath, 'resources', 'icon-flash.png')
-
-    const originalIcon = nativeImage.createFromPath(originalIconPath)
-    const flashingIcon = nativeImage.createFromPath(flashingIconPath)
+    
+    const originalIcon = nativeImage.createFromPath(icon)
+    const flashingIcon = nativeImage.createFromPath(iconFlash)
+    
     if (originalIcon.isEmpty() || flashingIcon.isEmpty()) {
-        console.error('Failed to load tray icons. Check paths:', originalIconPath, flashingIconPath)
+        console.error('Failed to load tray icons')
     }
     let tray = new Tray(originalIcon)
     function startFlashing() {

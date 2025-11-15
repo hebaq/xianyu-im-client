@@ -9,6 +9,9 @@ import { XyImService } from './im.service'
 import sendService from './send.service'
 import { userAdd, userGet, userList, userRemove, userUpdate } from './store.service'
 import { NotificationService } from './notification.service'
+import barkService from './bark.service'
+import xyJsModule from '../libs/xianyu_js_version_2.cjs'
+
 const notificationService = new NotificationService()
 
 export class XyUserService {
@@ -16,10 +19,138 @@ export class XyUserService {
 
     async userImLogin(user: GooFishUser) {
         this.userImLogout(user)
-        const xyImService = new XyImService(user)
-        await xyImService.init()
+        const xyImService = new XyImService(user) // 这里会生成或复用 deviceId
+        
+        // XyImService 构造函数可能生成了新的 deviceId，需要保存
+        if (user.deviceId) {
+            userUpdate(user)
+        }
+        
+        try {
+            await xyImService.init()
+        } catch (error: any) {
+            console.error(`[UserService] ❌ IM初始化失败:`, error)
+            
+            // 检查是否需要重新登录
+            if (error.message && error.message.startsWith('NEED_RELOGIN:')) {
+                const errorMsg = error.message.replace('NEED_RELOGIN:', '')
+                console.log(`[UserService] ❌ 登录已失效: ${errorMsg}`)
+                
+                sendService.log2renderer(
+                    '登录失效',
+                    `用户 ${user.displayName} 登录已失效，请删除账号重新添加`,
+                    0,
+                    true
+                )
+                
+                // 标记账号为离线
+                user.online = false
+                userUpdate(user)
+                sendService.send2renderer('refreshUserList')
+                return
+            }
+            
+            // 检查是否需要验证
+            if (error.message && error.message.startsWith('NEED_VERIFY:')) {
+                const verifyUrl = error.message.replace('NEED_VERIFY:', '')
+                console.log(`[UserService] 🔓 打开验证窗口:`, verifyUrl)
+                
+                // 创建验证窗口
+                const verifyWindow = sandboxManager.createSandbox(user.userId + '-verify').browserWindow
+                const page = await browserService.getPage(verifyWindow)
+                
+                if (page) {
+                    await page.goto(verifyUrl)
+                    
+                    sendService.log2renderer(
+                        '需要验证',
+                        `用户 ${user.displayName} 需要完成滑块验证。完成后会跳转到淘宝页面，这是正常的。请关闭验证窗口，然后再次点击账号上线即可`,
+                        0,
+                        true
+                    )
+                    
+                    // 使用标志防止重复处理
+                    let verificationHandled = false
+                    
+                    // 监听页面导航，检测验证是否成功
+                    page.on('framenavigated', async (frame) => {
+                        if (frame === page.mainFrame() && !verificationHandled) {
+                            const url = frame.url()
+                            console.log(`[UserService] 🔍 页面导航到: ${url}`)
+                            
+                            // 如果跳转到淘宝或闲鱼主页，说明验证成功
+                            if ((url.includes('taobao.com') || url.includes('goofish.com')) && 
+                                !url.includes('punish') && 
+                                !url.includes('login') &&
+                                !url.includes('passport')) {
+                                console.log(`[UserService] ✅ 验证成功，已跳转到: ${url}`)
+                                verificationHandled = true // 标记为已处理
+                                
+                                // 获取最新的 cookies 并更新用户数据
+                                try {
+                                    // 等待页面稳定
+                                    await new Promise(resolve => setTimeout(resolve, 2000))
+                                    
+                                    // 获取所有域名的 cookies 并合并
+                                    const allCookies = await page.cookies()
+                                    const goofishCookies = await page.cookies('https://www.goofish.com')
+                                    const taobaoCookies = await page.cookies('https://www.taobao.com')
+                                    
+                                    const cookieMap = new Map()
+                                    for (const cookie of [...allCookies, ...goofishCookies, ...taobaoCookies]) {
+                                        const key = `${cookie.name}_${cookie.domain}`
+                                        cookieMap.set(key, cookie)
+                                    }
+                                    const newCookies = Array.from(cookieMap.values())
+                                    
+                                    // 更新用户的 cookies
+                                    user.cookies = newCookies
+                                    
+                                    // 确保 deviceId 存在
+                                    if (!user.deviceId) {
+                                        user.deviceId = xyJsModule.generate_device_id(user.userId)
+                                    }
+                                    
+                                    userUpdate(user)
+                                    
+                                    sendService.log2renderer(
+                                        '验证成功',
+                                        `用户 ${user.displayName} 验证成功！Cookies 已更新 (${newCookies.length} 个)。请关闭此窗口，然后再次点击账号上线`,
+                                        1,
+                                        true
+                                    )
+                                } catch (error) {
+                                    console.error(`[UserService] ❌ 更新 cookies 失败:`, error)
+                                    sendService.log2renderer(
+                                        '验证失败',
+                                        `用户 ${user.displayName} Cookies 更新失败，请重新验证`,
+                                        0,
+                                        true
+                                    )
+                                }
+                            }
+                        }
+                    })
+                }
+                return
+            }
+            
+            sendService.log2renderer(
+                '连接失败',
+                `用户 ${user.displayName} IM连接失败，可能触发风控，请稍后重试或重新登录`,
+                0,
+                true
+            )
+            return
+        }
         this.users.set(user.userId, xyImService)
+        console.log(`[UserService] Registering message listener for user: ${user.userId}`)
         xyImService.on('message', async (msg) => {
+            // 过滤掉自己发送的消息
+            if (String(msg.senderUserId) === String(user.userId)) {
+                return
+            }
+            
             // TODO: 暂时先注释，后面优化自动回复
             // xyImService.readMsg(msg); // 此处自动已读消息
             // msgService.handleMsg(msg, xyImService)
@@ -29,7 +160,7 @@ export class XyUserService {
                 : `💬 [${user.displayName}] 收到 ${msg.senderName}: ${msg.content.length > 30 ? msg.content.substring(0, 30) + '...' : msg.content}`
             sendService.log2renderer(`新消息`, messagePreview)
             
-            // 显示系统通知和播放声音
+            // 显示系统通知
             await notificationService.showNewMessageNotification(
                 user.userId,
                 msg.senderName,
@@ -44,9 +175,20 @@ export class XyUserService {
             const olduser = userGet(user.userId)
             if (olduser) {
                 olduser.unread = true
+                olduser.unreadCount = (olduser.unreadCount || 0) + 1
                 userUpdate(olduser)
                 sendService.send2renderer('refreshUserList')
                 emitterService.emit('newMsg',`来自 ${msg.senderName} 的新消息`)
+                
+                // 发送 Bark 通知
+                try {
+                    await barkService.sendNotification(
+                        `${olduser.displayName} 新消息`,
+                        `来自 ${msg.senderName}: ${msg.content || '收到新消息'}`
+                    )
+                } catch (error: any) {
+                    console.error(`[UserService] ❌ Bark notification failed:`, error?.message || error)
+                }
             }
         })
         xyImService.on('connected', () => {
@@ -63,8 +205,17 @@ export class XyUserService {
     }
 
     async userRemove(user:GooFishUser){
-        this.userImLogout(user)
+        console.log(`[UserService] 🗑️ Removing user: ${user.userId} (${user.displayName})`)
+        // 先断开连接
+        if (this.users.has(user.userId)) {
+            const xyImService = this.users.get(user.userId)
+            xyImService?.disconnect()
+            this.users.delete(user.userId)
+            console.log(`[UserService] ✅ Disconnected and removed from active users map`)
+        }
+        // 然后删除用户数据（不要调用 userImLogout，因为它会更新用户数据）
         userRemove(user)
+        console.log(`[UserService] ✅ User data deleted from store`)
         sendService.log2renderer('解除绑定',user.displayName)
         sendService.send2renderer('refreshUserList')
     }
@@ -74,8 +225,12 @@ export class XyUserService {
             const xyImService = this.users.get(user.userId)
             xyImService?.disconnect() // 使用新的断开连接方法
             this.users.delete(user.userId)
-            user.online = false
-            userUpdate(user)
+        }
+        // 只更新在线状态，不重新保存用户数据
+        const existingUser = userGet(user.userId)
+        if (existingUser) {
+            existingUser.online = false
+            userUpdate(existingUser)
         }
         sendService.log2renderer('断开连接',user.displayName + ' 断开连接')
         sendService.send2renderer('refreshUserList')
@@ -116,21 +271,25 @@ export class XyUserService {
         }
         if (page.url().endsWith('www.goofish.com/')) {
             page.on('response', async (response) => {
-                const req = response.request()
-                const method = req.method()
-                const url = response.url()
-                if (url.includes('pc.loginuser.get') && method.toLocaleLowerCase() === 'post') {
-                    const bodyData = await response.json()
-                    userInfo.userId = bodyData.data.userId
-                    userInfo.lastLogin = new Date().getTime() + ''
-                }
-                if (
-                    url.includes('mtop.idle.web.user.page.nav') &&
-                    method.toLocaleLowerCase() === 'post'
-                ) {
-                    const respData = await response.json()
-                    userInfo.avatar = respData.data.module.base.avatar
-                    userInfo.displayName = respData.data.module.base.displayName
+                try {
+                    const req = response.request()
+                    const method = req.method()
+                    const url = response.url()
+                    if (url.includes('pc.loginuser.get') && method.toLocaleLowerCase() === 'post') {
+                        const bodyData = await response.json()
+                        userInfo.userId = bodyData.data.userId
+                        userInfo.lastLogin = new Date().getTime() + ''
+                    }
+                    if (
+                        url.includes('mtop.idle.web.user.page.nav') &&
+                        method.toLocaleLowerCase() === 'post'
+                    ) {
+                        const respData = await response.json()
+                        userInfo.avatar = respData.data.module.base.avatar
+                        userInfo.displayName = respData.data.module.base.displayName
+                    }
+                } catch (err) {
+                    // Ignore response parsing errors
                 }
             })
             await page.goto('https://www.goofish.com/im')
@@ -143,9 +302,20 @@ export class XyUserService {
         await waitFor(() => userInfo.userId != '' && userInfo.displayName != '', 10)
         const cookies = await page.cookies()
         userInfo.cookies = cookies
-        sendService.log2renderer('登录成功', userInfo.displayName + ' 登录成功', 1, true)
-        await this.userImLogin(userInfo)
-        wind.close()
+        
+        // 生成并保存 deviceId
+        userInfo.deviceId = xyJsModule.generate_device_id(userInfo.userId)
+        
+        // 保存用户信息
+        userAdd(userInfo)
+        sendService.send2renderer('refreshUserList')
+        
+        sendService.log2renderer(
+            '添加成功', 
+            `账号 ${userInfo.displayName} 已添加！请关闭此窗口，然后点击账号上线`, 
+            1, 
+            true
+        )
     }
 
     async reLogin(userId: string) {
@@ -166,16 +336,20 @@ export class XyUserService {
         }
         await browserService.initPage(page)
         page.on('response', async (response) => {
-            const req = response.request()
-            const method = req.method()
-            const url = response.url()
-            if (
-                url.includes('pc.login.token') &&
-                method.toLocaleLowerCase() === 'post' &&
-                response.status() == 200
-            ) {
-                const body = await response.json()
-                newAccessToken = body.data.accessToken
+            try {
+                const req = response.request()
+                const method = req.method()
+                const url = response.url()
+                if (
+                    url.includes('pc.login.token') &&
+                    method.toLocaleLowerCase() === 'post' &&
+                    response.status() == 200
+                ) {
+                    const body = await response.json()
+                    newAccessToken = body.data.accessToken
+                }
+            } catch (err) {
+                // Ignore response parsing errors
             }
         })
         await page.setCookie(...user.cookies)
@@ -225,5 +399,29 @@ export class XyUserService {
             userUpdate(user)
             await this.userImLogin(user)
         }
+    }
+
+    async loadUserChatPage(userId: string) {
+        const user = userGet(userId)
+        if (!user) {
+            sendService.log2renderer('加载失败', `用户${userId}不存在`, 0)
+            return
+        }
+        
+        if (!user.cookies || user.cookies.length === 0) {
+            sendService.log2renderer('加载失败', `用户${user.displayName}没有cookies，请重新登录`, 0)
+            return
+        }
+        
+        // 清除未读数
+        user.unread = false
+        user.unreadCount = 0
+        userUpdate(user)
+        sendService.send2renderer('refreshUserList')
+        
+        sendService.send2renderer('switchToUser', {
+            userId: user.userId,
+            cookies: user.cookies
+        })
     }
 }

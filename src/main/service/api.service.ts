@@ -30,6 +30,12 @@ export class XyApiService {
             sessionOption: 'AutoLoginOnly',
             spm_cnt: 'a21ybx.im.0.0'
         }
+        
+        if (!this.cookie['_m_h5_tk']) {
+            console.error(`[ApiService] ❌ Cookie '_m_h5_tk' not found!`)
+            console.error(`[ApiService] Available cookies:`, Object.keys(this.cookie))
+        }
+        
         params.sign = xyJsModule.generate_sign(
             t,
             this.cookie['_m_h5_tk'].split('_')[0],
@@ -39,30 +45,52 @@ export class XyApiService {
     }
 
     async getToken() {
-        const bodyDataStr = JSON.stringify({
-            appKey: APP_KEY,
-            deviceId: this.deviceId
-        })
-        const params = this.generateParams(bodyDataStr)
-        const response = await axios.post(
-            API_PATH,
-            qs.stringify({
-                data: bodyDataStr
-            }),
-            {
-                params,
-                headers: {
-                    ...HEADERS,
-                    Cookie: this.cookieStr
+        try {
+            const bodyDataStr = JSON.stringify({
+                appKey: APP_KEY,
+                deviceId: this.deviceId
+            })
+            const params = this.generateParams(bodyDataStr)
+            const response = await axios.post(
+                API_PATH,
+                qs.stringify({
+                    data: bodyDataStr
+                }),
+                {
+                    params,
+                    headers: {
+                        ...HEADERS,
+                        Cookie: this.cookieStr
+                    }
+                }
+            )
+            
+            // 检查返回状态
+            if (response.data.ret && response.data.ret.length > 0) {
+                const errorCode = response.data.ret[0]
+                
+                // 滑块验证
+                if (errorCode === 'FAIL_SYS_USER_VALIDATE') {
+                    const verifyUrl = response.data.data?.url
+                    if (verifyUrl) {
+                        return { needVerify: true, verifyUrl }
+                    }
+                }
+                // 登录失效
+                else if (errorCode.includes('RGV587_ERROR') || errorCode.includes('被挤爆')) {
+                    console.error(`[ApiService] ❌ 登录已失效: ${errorCode}`)
+                    return { needRelogin: true, error: '登录已失效，请删除账号重新添加' }
                 }
             }
-        )
-        // ipc2RenderLog({
-        //     subject: '获取token',
-        //     body: JSON.stringify(response.data.data),
-        //     channel: 'sys',
-        //     status: response.data.data ? 1 : 0
-        // })
-        return response.data.data
+            
+            if (!response.data.data || !response.data.data.accessToken) {
+                console.error(`[ApiService] ❌ Token获取失败，响应数据:`, response.data)
+            }
+            
+            return response.data.data || {}
+        } catch (error) {
+            console.error(`[ApiService] ❌ Token获取异常:`, error)
+            return {}
+        }
     }
 }

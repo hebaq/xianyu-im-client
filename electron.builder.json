@@ -2,6 +2,7 @@
     "appId": "com.goofish.xxx",
     "asar": true,
     "productName": "闲鱼助手",
+    "forceCodeSigning": false,
     "directories": {
         "output": "release/${version}",
         "buildResources": "build"
@@ -43,7 +44,7 @@
             }
         ],
         "icon": "resources/icon.png",
-        // "requestedExecutionLevel": "requireAdministrator",
+        "sign": null,
         "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
     },
     "portable": {

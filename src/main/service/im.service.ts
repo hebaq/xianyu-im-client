@@ -31,7 +31,12 @@ export class XyImService {
     constructor(user: GooFishUser) {
         this.user = user
         this.cookieStr = array2cookie(user.cookies)
-        this.deviceId = xyJsModule.generate_device_id(user.userId)
+        
+        // 如果用户已有 deviceId，复用它；否则生成新的
+        if (!user.deviceId) {
+            user.deviceId = xyJsModule.generate_device_id(user.userId)
+        }
+        this.deviceId = user.deviceId!
         this.apiService = new XyApiService(this.cookieStr, this.deviceId)
     }
 
@@ -49,8 +54,28 @@ export class XyImService {
 
     // 初始化
     async init() {
-        const { accessToken } = await this.apiService.getToken()
+        const tokenResult = await this.apiService.getToken()
+        
+        // 检查是否需要重新登录
+        if (tokenResult.needRelogin) {
+            console.log(`[User:${this.user.userId}] ❌ 登录已失效`)
+            throw new Error(`NEED_RELOGIN:${tokenResult.error}`)
+        }
+        
+        // 检查是否需要验证
+        if (tokenResult.needVerify && tokenResult.verifyUrl) {
+            console.log(`[User:${this.user.userId}] ⚠️ 需要完成风控验证`)
+            throw new Error(`NEED_VERIFY:${tokenResult.verifyUrl}`)
+        }
+        
+        const { accessToken } = tokenResult
         this.token = accessToken
+        console.log(`[User:${this.user.userId}] 🔑 Token obtained: ${accessToken ? accessToken.substring(0, 20) + '...' : 'EMPTY'}`)
+        
+        if (!accessToken) {
+            throw new Error('Token获取失败，可能触发了风控验证，请重新登录或稍后重试')
+        }
+        
         this.connect()
     }
     private async connect() {
@@ -84,7 +109,21 @@ export class XyImService {
                 // 收到任何消息都更新心跳时间
                 this.lastHeartbeatTime = Date.now()
                 
+                console.log(`[User:${this.user.userId}] 🔵 Raw WebSocket Message Received`)
                 const message = JSON.parse(msg.toString())
+                console.log(`[User:${this.user.userId}] 🔵 Message Parsed, lwp: ${message.lwp}`)
+                
+                // 区分ACK响应和业务消息
+                if (!message.lwp && message.code) {
+                    console.log(`[User:${this.user.userId}] ⚪ ACK Response: code=${message.code}, mid=${message.headers?.mid}`)
+                    // 如果是错误响应，显示完整信息
+                    if (message.code !== 200) {
+                        console.error(`[User:${this.user.userId}] ❌ Error Response:`, JSON.stringify(message, null, 2))
+                    }
+                } else {
+                    console.log(`[User:${this.user.userId}] 🔵 Message Keys:`, Object.keys(message))
+                    console.log(`[User:${this.user.userId}] 🔵 Full Message:`, JSON.stringify(message, null, 2))
+                }
 
                 if (message.headers?.mid) {
                     const ack = {
@@ -102,11 +141,18 @@ export class XyImService {
                 }
                 
                 // 处理业务消息
+                console.log(`[User:${this.user.userId}] 🔵 Checking if business message: lwp=${message.lwp}, hasSyncPushPackage=${!!message.body?.syncPushPackage}`)
                 if (message.lwp && message.lwp === '/s/sync' && message.body?.syncPushPackage) {
+                    console.log(`[User:${this.user.userId}] 🟢 Processing Business Message`)
                     const encryptedData = message.body.syncPushPackage.data[0].data
+                    console.log(`[User:${this.user.userId}] 🔵 Decrypting message data`)
                     const decrypted = xyJsModule.decrypt(encryptedData)
                     const msg = JSON.parse(decrypted)
-                    if (Object.keys(msg).length !== 2) return
+                    console.log(`[User:${this.user.userId}] 🔵 Decrypted message keys count: ${Object.keys(msg).length}`)
+                    if (Object.keys(msg).length !== 2) {
+                        console.log(`[User:${this.user.userId}] ⚠️ Message keys count !== 2, skipping`)
+                        return
+                    }
                     const senderName = msg['1']['10']['reminderTitle']
                     const senderUserId = msg['1']['10']['senderUserId']
                     const content = msg['1']['10']['reminderContent']
@@ -145,7 +191,9 @@ export class XyImService {
                     }
                     // message handler
                     // msgService.handleMsg(formattedMsg, this.ws!)
+                    console.log(`[User:${this.user.userId}] 🟢 Emitting 'message' event, listeners count: ${this.emitter.listenerCount('message')}`)
                     this.emit('message', formattedMsg)
+                    console.log(`[User:${this.user.userId}] ✅ Message event emitted successfully`)
                 }
             } catch (err) {
                 // 只记录非预期的错误
@@ -298,9 +346,11 @@ export class XyImService {
     }
 
     private sendInitMsg() {
+        console.log(`[User:${this.user.userId}] 📤 Sending /reg message`)
         this.ws?.send(this.createMsgPayload('/reg'))
         setTimeout(() => {
             // 2秒后再发一条消息
+            console.log(`[User:${this.user.userId}] 📤 Sending /r/SyncStatus/ackDiff message`)
             this.ws?.send(
                 this.createMsgPayload('/r/SyncStatus/ackDiff', [
                     {
@@ -319,6 +369,7 @@ export class XyImService {
     }
 
     private sendSyncMsg() {
+        console.log(`[User:${this.user.userId}] 📤 Sending /r/SyncStatus/getState message`)
         const syncMsg = {
             lwp: '/r/SyncStatus/getState',
             headers: { mid: xyJsModule.generate_mid() },
